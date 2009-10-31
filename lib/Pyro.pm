@@ -10,6 +10,7 @@ our $VERSION = '0.00001';
 
 has host => (
     is => 'ro',
+    default => '0.0.0.0',
 );
 
 has port => (
@@ -47,7 +48,7 @@ sub start {
     my $server = $self->server;
     $server->start($self);
 
-    print "Starting Pyro/$VERSION on ", $self->host || '0.0.0.0', ':',  $self->port, "\n";
+    print "Starting Pyro/$VERSION on ", $self->host, ':',  $self->port, "\n";
     my $cv = AnyEvent->condvar;
     $SIG{INT} = sub {
         print STDERR "Received SIGINT";
