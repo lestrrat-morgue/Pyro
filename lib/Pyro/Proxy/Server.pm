@@ -1,5 +1,7 @@
 package Pyro::Proxy::Server;
 use Moose;
+use Coro;
+use Coro::AnyEvent;
 use AnyEvent::Socket;
 use namespace::clean -except => qw(meta);
 

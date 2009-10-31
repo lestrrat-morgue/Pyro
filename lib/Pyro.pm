@@ -2,6 +2,7 @@ package Pyro;
 use Moose;
 use AnyEvent::Socket;
 use Pyro::Cache;
+use Pyro::Log;
 use Pyro::Proxy::Client;
 use Pyro::Proxy::Server;
 use namespace::clean -except => qw(meta);
@@ -34,7 +35,16 @@ has server => (
     lazy_build => 1,
 );
 
+has log => (
+    is => 'ro',
+    isa => 'Pyro::Log',
+    lazy_build => 1,
+);
+
 sub _build_clients { [] }
+sub _build_log {
+    return Pyro::Log->new();
+}
 sub _build_server {
     my $self = shift;
     return Pyro::Proxy::Server->new(

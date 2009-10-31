@@ -2,9 +2,12 @@ package Pyro::Proxy::Client;
 use Moose;
 use AnyEvent::Socket;
 use AnyEvent::Handle;
+use Coro;
 use HTTP::Date;
 use HTTP::Request;
 use HTTP::Response;
+use Pyro::Handle;
+use Pyro::Hook;
 use Scalar::Util qw(weaken);
 use URI;
 use namespace::clean -except => qw(meta);
@@ -20,39 +23,66 @@ has hcache => (
     isa => 'Pyro::Cache',
 );
 
+has request => (
+    is => 'ro',
+    isa => 'HTTP::Request',
+    writer => 'set_request',
+);
+
+has response => (
+    is => 'ro',
+    isa => 'HTTP::Response',
+    writer => 'set_response',
+);
+
+sub build_request {
+    my ($self, $method, $url, $protocol, $headers) = @_;
+    my $request = HTTP::Request->new($method, $url, [ %$headers ]);
+    my $response = HTTP::Response->new(200, "OK");
+    $response->request($request);
+    $self->set_request($request);
+    $self->set_response($response);
+    return $request;
+}
+
+sub build_handle {
+    my ($self, $context, $fh, @args) = @_;
+
+    my $handle = Pyro::Handle->new(
+        fh => $fh,
+        @args,
+    );
+    return $handle;
+}
+
 sub start {
     my ($self, $context) = @_;
 
-    weaken($self);
-    my $hdl = AnyEvent::Handle->new(
-        fh => $self->handle,
-    );
+    my $server;
+    my $client = $self->build_handle($context, $self->handle);
+    {
+        my $clear_guard = sub { delete $self->{guard} };
+        $client->unshift_eof_callback( $clear_guard );
+        $client->unshift_error_callback( $clear_guard );
+    }
 
-    my $make_finalizer = sub {
-        my $victim = shift;
-        return sub {
-            if ($victim) { # paranoid
-                close($victim->fh) if $victim->fh;
-                $victim->destroy();
-            }
-        }
+    my $respond = sub {
+        $context->log->debug("REPLY: " . $self->response->code . "\n");
+        $client->push_write( "HTTP/1.1 " . $self->response->as_string );
+        $client->on_drain( sub {
+            $context->log->debug( "FINALIZE - " . $self->request->uri . "\n" );
+            $client->on_eof->get_callback_at(-1)->();
+            $server->on_eof->get_callback_at(-1)->();
+        } );
     };
-    my $main_finalize = $make_finalizer->( $hdl );
-    my $client_finalize = sub {
-        delete $self->{guard}; # delete'em all
-        $main_finalize->();
-    };
-
-    $hdl->on_eof( $client_finalize ); # close 
 
     my $hcache = $self->hcache;
 
     # server handler.
     # this is simple, as it's just a HTTP request
     my $server_cb = sub {
-        my $request = shift;
-
-        $self->modify_request( $request );
+        $self->modify_request();
+        my $request = $self->request();
         my $host = $request->header('Host');
         my $port = 80;
         if (! $host) {
@@ -62,31 +92,26 @@ sub start {
         } elsif ($host =~ s/:(\d+)$//) {
             $port = $1;
         }
+        my $respond_error = sub {
+            $context->log->error( "FAIL " . $self->request->uri . "\n");
+            $self->response->code(502);
+            $respond->();
+        };
+
         my $guard; $guard = tcp_connect $host, $port, sub {
             my $fh = shift;
 
             undef $guard;
             if (! $fh) {
-                warn "failed to connect to $host:$port";
-                $client_finalize->();
+                $respond_error->();
                 return;
             }
 
-            my $server; $server = AnyEvent::Handle->new(
-                fh => $fh,
+            $server = $self->build_handle( $context, $fh,
                 tmeout => 0.3,
             );
-            my $server_finalize = $make_finalizer->($server);
-            $server->on_eof( $server_finalize );
-            $server->on_timeout( sub {
-                $hdl->push_write(
-                    "HTTP/1.1 502 Server Timeout\nServer: Pyro\n\n"
-                );
-                $hdl->on_drain( sub {
-                    $client_finalize->();
-                    $server_finalize->();
-                } );
-            } );
+            $server->unshift_eof_callback( $respond_error );
+            $server->unshift_timeout_callback( $respond_error );
 
             my $data = 
                 sprintf("%s %s HTTP/1.1", $request->method, $request->uri) . "\n" .
@@ -101,47 +126,38 @@ sub start {
                     $self->_parse_response_prologue( $prologue );
                 if ($hcache && $status eq 304) {
                     if ( my $cache = $hcache->get_content_cache_for( $request ) ) {
-                        $server_finalize->();
-                        $hdl->push_write( $cache );
-                        $hdl->on_drain( sub {
-                            $client_finalize->();
-                        } );
+warn "here";
+                        $context->log->debug( "CACHE: HIT on " . $request->uri . "\n");
+                        $self->response($cache);
+                        $self->response->request( $self->request );
+                        $respond->();
                         return; # stop processing
                     }
                 }
 
-                my $response = HTTP::Response->new($status, $message, [ %$headers ]);
-                $response->request($request);
+                my $response = $self->response;
+                $response->code($status);
+                $response->message($message);
+                $response->headers->push_header(%$headers);
                 my $post = sub {
                     if ($hcache && $hcache->set_lastmod_cache_if_applicable($response)) {
-                        $hcache->set_content_cache_for( $response );
+                        $hcache->set_content_cache_for( $self->response );
                     }
                 };
 
                 if (my $ct_length = $headers->{'content-length'}) {
                     $server->push_read(chunk => $ct_length, sub {
-                        $response->content($_[1]);
-                        $hdl->push_write(
-                            "HTTP/$protocol $status $message\n" .
-                            "$header_string\n" .
-                            $_[1]
+                        $self->response->content($_[1]);
+                        $respond->();
+                        AnyEvent->timer(after => 1,
+                            cb => $post
                         );
-                        $hdl->on_drain( sub {
-                            $client_finalize->();
-                            $server_finalize->();
-                            $post->();
-                        });
                     });
                 } else {
-                    $hdl->push_write(
-                        "HTTP/$protocol $status $message\n" .
-                        "$header_string\n"
+                    $respond->();
+                    AnyEvent->timer(after => 1,
+                        cb => $post
                     );
-                    $hdl->on_drain( sub {
-                        $client_finalize->();
-                        $server_finalize->();
-                        $post->();
-                    } );
                 }
             });
             $self->{guard}->{server} = $server;
@@ -150,29 +166,30 @@ sub start {
     };
 
     # client handler
-    $hdl->push_read( line => qr{(?<![^\012])\015?\012},
+    async {
+    $client->push_read( line => qr{(?<![^\012])\015?\012},
         sub {
-            my ($hdl, $prologue) = @_;
+            my ($client, $prologue) = @_;
 
             my ($method, $url, $protocol, $header_string, $headers) = 
                 $self->_parse_request_prologue( $prologue );
 
-            my $r = HTTP::Request->new($method, $url);
-            $hdl->{request} = $r;
-
+            $self->build_request( $method, $url, $protocol, $headers );
+$context->log->debug( "REQUEST - " . $self->request->uri->path . "\n");
             if (my $ct_length = $headers->{'content-length'}) {
-                $hdl->push_read(chunk => $ct_length, sub {
-                    my ($hdl, $data) = @_;
-                    $hdl->{request}->content( $data );
-                    $server_cb->($hdl->{request});
+                $client->push_read(chunk => $ct_length, sub {
+                    my ($client, $data) = @_;
+                    $self->request->content( $data );
+                    $server_cb->();
                 });
             } else {
-                $server_cb->($hdl->{request}); 
+                $server_cb->(); 
             }
         }
     );
-    $self->{guard}->{handle} = $hdl;
+    $self->{guard}->{handle} = $client;
     $context->add_client( $self );
+    }
 }
 
 my $url_re = qr{(?:(?:[^:/?#]+):)?(?://(?:[^/?#]*))?(?:[^?#]*)(?:\?(?:[^#]*))?(?:#(?:.*))?};
@@ -227,7 +244,9 @@ sub _parse_headers {
 }
 
 sub modify_request {
-    my ($self, $request) = @_;
+    my $self = shift;
+
+    my $request = $self->request;
 
     # Normalize the URI (hey, you DID send us a complete URI, right?)
     # After this point, we /guarantee/ that the request contains a valid Host
