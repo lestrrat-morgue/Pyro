@@ -1,0 +1,6 @@
+#!/opt/local/bin/perl
+use strict;
+use lib "lib";
+use App::Pyro;
+
+App::Pyro->new_with_options()->run();
