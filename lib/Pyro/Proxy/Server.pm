@@ -5,6 +5,12 @@ use Coro::AnyEvent;
 use AnyEvent::Socket;
 use namespace::clean -except => qw(meta);
 
+has hcache => (
+    is => 'ro',
+    isa => 'Pyro::Cache',
+    lazy_build => 1,
+);
+
 has host => (
     is => 'ro',
 );
@@ -19,19 +25,19 @@ has tcp_server_guard => (
     writer => 'set_tcp_server_guard'
 );
 
+sub _build_hcache { Pyro::Cache->new() }
+
 sub start {
     my ($self, $context) = @_;
-    my $cache = Pyro::Cache->new();
+    my $client = Pyro::Proxy::Client->new(
+        server => $self,
+    );
 
     my $guard = tcp_server $self->host, $self->port, sub {
         my ($socket, $host, $port) = @_;
-        my $client = Pyro::Proxy::Client->new(
-            handle      => $socket,
-            remote_host => $host,
-            remote_port => $port,
-            hcache      => $cache,
-        );
-        $client->start($context);
+
+        # XXX throttle?
+        $client->process_connection( $socket, $context );
     };
     $self->set_tcp_server_guard($guard);
 }

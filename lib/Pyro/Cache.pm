@@ -32,7 +32,7 @@ sub _build_cache {
 sub set_lastmod_cache_if_applicable {
     my ($self, $response) = @_;
     if (my $last_modified = $response->header('Last-Modified')) {
-        my $key = $response->request->uri . '.lastmod';
+        my $key = $response->request->original_uri . '.lastmod';
         my $time = HTTP::Date::str2time($last_modified);
         my $v = $self->cache->get($key);
         if (! $v || $time >= $v) {
@@ -46,18 +46,18 @@ sub set_lastmod_cache_if_applicable {
 sub set_content_cache_for {
     my ($self, $response) = @_;
     $self->cache->set(
-        $response->request->uri . '.request' => $response
+        $response->request->original_uri . '.request' => $response
     );
 }
 
 sub get_content_cache_for {
     my ($self, $request) = @_;
-    $self->cache->get( $request->uri . '.request' );
+    $self->cache->get( $request->original_uri . '.request' );
 }
 
 sub get_last_modified_cache_for {
     my ($self, $request) = @_;
-    $self->cache->get( $request->uri . '.lastmod' );
+    $self->cache->get( $request->original_uri . '.lastmod' );
 }
 
 
