@@ -1,6 +1,6 @@
 package Pyro;
 use Moose;
-use AnyEvent::Socket;
+use AnyEvent;
 use Pyro::Cache;
 use Pyro::Log;
 use Pyro::Proxy::Client;
