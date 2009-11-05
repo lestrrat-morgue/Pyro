@@ -3,6 +3,29 @@ use Moose;
 use AnyEvent::HTTP qw(http_request);
 use namespace::clean -except => qw(meta);
 
+has apoptosis_timeout => (
+    is => 'ro',
+    isa => 'Int',
+    default => 60,
+);
+
+has apoptosis_timer => (
+    is => 'rw',
+    clearer => 'clear_apoptosis_timer',
+);
+
+has host => (
+    is => 'ro',
+    isa => 'Str',
+    required => 1
+);
+
+has port => (
+    is => 'ro',
+    isa => 'Int',
+    required => 1
+);
+
 has queue => (
     traits => ['Array'],
     is => 'ro',
@@ -11,6 +34,7 @@ has queue => (
     handles => {
         push_queue => 'push',
         pop_queue  => 'pop',
+        is_queue_empty => 'is_empty',
     }
 );
 
@@ -34,14 +58,40 @@ before push_queue => sub {
 # once you push a request, start draining
 after push_queue => sub {
     my $self = shift;
+    $self->stop_apoptosis_timer();
     $self->drain_queue();
 };
 
+sub start_apoptosis_timer {
+    my $self = shift;
+    $self->apoptosis_timer(
+        AnyEvent->timer(
+            after => $self->apoptosis_timeout,
+            cb    => sub {
+                my $host_port = join(':', $self->host, $self->port);
+                delete $INSTANCES{ $host_port };
+            }
+        )
+    );
+}
+
+sub stop_apoptosis_timer {
+    my $self = shift;
+    $self->clear_apoptosis_timer();
+}
+
 sub drain_queue {
     my $self = shift;
-    
+
+    if ($self->is_queue_empty) {
+        # if we got here, there was no request. We should stay idle for
+        # a certain amount of time, and then remove ourselves from memory
+        $self->start_apoptosis_timer();
+        return;
+    }
+
     if (my $request = $self->pop_queue) {
-        $self->process_request($request);
+        return $self->process_request($request);
     }
 }
 
@@ -77,12 +127,16 @@ sub send_request {
         $self->send_request_no_probe( $request );
     }
 
-warn "SENDING request";
     my $guard; $guard = http_request 'HEAD' => $request->original_uri,
         headers => $request->headers,
         timeout => 0.5,
+        recurse => 5,
         on_header => sub {
             my $headers = shift;
+            if ( $headers->{Status} eq '302') {
+                confess "Unimplemented";
+            }
+
             if ( $headers->{Status} eq '304' ) {
                 confess "Unimplemented";
             }
@@ -99,8 +153,17 @@ sub send_request_no_probe {
     http_request
         $request->method => $request->original_uri,
         headers => $request->headers,
+        recurse => 0,
+        on_header => sub {
+            $request->respond_headers( $_[0] );
+            return 1;
+        },
+        on_body => sub {
+            $request->respond_data( $_[0] );
+            return 1;
+        },
         sub {
-            $request->respond_to_client( @_ );
+            $request->finalize_response();
             $self->drain_queue();
         }
     ;
@@ -147,3 +210,14 @@ __PACKAGE__->meta->make_immutable();
 1;
 
 __END__
+
+=head1 NAME
+
+Pyro::Proxy::Backend - Handle Backend Connection
+
+=head1 SYNOPSIS
+
+    my $backend = Pyro::Proxy::Backend->instance( $host, $port );
+    $backend->push_queue( $request );
+
+=cut

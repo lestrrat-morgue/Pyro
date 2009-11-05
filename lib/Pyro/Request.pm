@@ -102,27 +102,45 @@ sub original_uri {
 
 sub push_to_backend {
     my $self = shift;
-    $self->log->debug("BACKEND: queued " . $self->original_uri);
+    $self->log->debug("BACKEND: queued " . $self->original_uri . "\n");
     $self->backend->push_queue( $self );
 }
 
-sub respond_to_client {
-    my ($self, $data, $headers) = @_;
+sub respond_headers {
+    my ($self, $hdrs) = @_;
 
+    my $code     = delete $hdrs->{Status};
+    my $message  = delete $hdrs->{Reason};
+    my $protocol = delete $hdrs->{HTTPVersion};
     my $response = $self->_response;
-    $response->content($data);
-    $response->code( delete $headers->{Status} );
-    $response->message(delete $headers->{Reason} );
-    while (my ($key, $value) = each %$headers ) {
-        $response->push_header($key, $value);
+    my $headers  = $response->headers;
+    my $client  = $self->client;
+
+    $response->code( $code );
+    $response->message( $message );
+    while ( my( $key, $value ) = each %$hdrs ) {
+        $headers->push_header( $key, $value );
     }
 
-    $self->client->push_write(
-        "HTTP/1.1 " . $response->code . "\n" .
-        $response->as_string
-    );
-    $self->client->on_drain( sub { 
+    $client->push_write( "HTTP/$protocol $code $message\n" );
+    $client->push_write( $headers->as_string . "\n" );
+}
+
+sub respond_data {
+    my ($self, $data) = @_;
+
+    my $response = $self->_response;
+    my $client = $self->client;
+    $response->content($data);
+    $client->push_write( $data );
+}
+
+sub finalize_response {
+    my $self = shift;
+    my $client = $self->client;
+    $client->on_drain( sub { 
         close($self->client->fh);
+        $self->log->debug("RESPOND: " . $self->original_uri . "\n");
     });
 }
     
@@ -130,4 +148,5 @@ sub respond_to_client {
 __PACKAGE__->meta->make_immutable();
 
 1;
+    
 
