@@ -161,8 +161,7 @@ sub respond_from_cache {
     my ($self, $headers) = @_;
 
     my $hcache = $self->hcache;
-    # XXX ->cache is bad, mmmkay?
-    my $content = $hcache->cache->get( md5_hex( $self->original_uri . '.content' ) );
+    my $content = $hcache->get( md5_hex( $self->original_uri . '.content' ) );
     if ($content) {
         $self->log->debug("CACHE: GET " . $self->original_uri . " (HIT)\n");
         $self->respond_headers( $headers );
@@ -181,7 +180,7 @@ sub send_to_cache {
     $self->log->debug("CACHE: SET " . $self->original_uri . "\n");
 
     # XXX ->cache is bad, mmmkay?
-    $hcache->cache->set( md5_hex( $self->original_uri . '.content' ), $self->_response->content );
+    $hcache->set( md5_hex( $self->original_uri . '.content' ), $self->_response->content );
 }
 
 __PACKAGE__->meta->make_immutable();

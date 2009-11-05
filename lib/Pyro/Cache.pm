@@ -7,26 +7,53 @@ use namespace::clean -except => qw(meta);
 class_type 'Cache::Memcached';
 class_type 'Cache::Memcached::Fast';
 class_type 'Cache::Memcached::libmemcached';
+
 has cache => (
     is => 'ro',
-    isa => 'Cache::Memcached | Cache::Memcached::Fast | Cache::Memcached::libmemcached',
+    isa => 'Maybe[ Cache::Memcached | Cache::Memcached::Fast | Cache::Memcached::libmemcached ]',
     lazy_build => 1,
 );
 
-sub _build_cache {
-    my $cache_class = 'Cache::Memcached::Fast';
-    if (! Class::MOP::is_class_loaded($cache_class)) {
-        Class::MOP::load_class($cache_class);
-    }
-    my $cache = $cache_class->new( {
-        servers => [ '127.0.0.1:11211' ],
-        compress_threshold => 10_000,
-    } );
+has cache_servers => (
+    is => 'ro',
+    isa => 'ArrayRef',
+    predicate => 'has_cache_servers',
+);
 
-    if ($cache_class->isa('Cache::Memcached::libmemcached')) {
-        $cache->set_binary_protocol(1);
+sub _build_cache {
+    my $self = shift;
+    my $cache;
+    if ( $self->has_cache_servers ) {
+        my $cache_class = 'Cache::Memcached::Fast';
+        if (! Class::MOP::is_class_loaded($cache_class)) {
+            Class::MOP::load_class($cache_class);
+        }
+        $cache = $cache_class->new( {
+            servers => $self->cache_servers,
+            compress_threshold => 10_000,
+        } );
+
+        if ($cache_class->isa('Cache::Memcached::libmemcached')) {
+            $cache->set_binary_protocol(1);
+        }
     }
     return $cache;
+}
+
+sub get {
+    my $self = shift;
+    if (my $cache = $self->cache) {
+        return $cache->get(@_);
+    }
+    return;
+}
+
+sub set {
+    my $self = shift;
+    if (my $cache = $self->cache) {
+        return $cache->set(@_);
+    }
+    return;
 }
 
 sub set_lastmod_cache_if_applicable {
