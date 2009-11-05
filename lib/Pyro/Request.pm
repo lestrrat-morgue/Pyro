@@ -1,5 +1,6 @@
 package Pyro::Request;
 use Moose;
+use Digest::MD5 qw(md5_hex);
 use HTTP::Request;
 use HTTP::Response;
 use Pyro::Proxy::Backend;
@@ -131,19 +132,57 @@ sub respond_data {
 
     my $response = $self->_response;
     my $client = $self->client;
-    $response->content($data);
+    ${$response->content_ref} .= $data;
     $client->push_write( $data );
 }
 
 sub finalize_response {
     my $self = shift;
     my $client = $self->client;
+
     $client->on_drain( sub { 
         close($self->client->fh);
         $self->log->debug("RESPOND: " . $self->original_uri . "\n");
+
+        # if it's cacheable, send it to the cache
+        my $no_cache = 
+            $self->method !~ /^(?:GET)$/ ||
+            ($self->header('Pragma') || '') =~ /\bno-cache\b/ ||
+            ($self->header('Cache-Control') || '') =~ /\bno-cache\b/
+        ;
+
+        if (! $no_cache && ! $self->_response->is_error ) {
+            $self->send_to_cache();
+        }
     });
 }
     
+sub respond_from_cache {
+    my ($self, $headers) = @_;
+
+    my $hcache = $self->hcache;
+    # XXX ->cache is bad, mmmkay?
+    my $content = $hcache->cache->get( md5_hex( $self->original_uri . '.content' ) );
+    if ($content) {
+        $self->log->debug("CACHE: GET " . $self->original_uri . " (HIT)\n");
+        $self->respond_headers( $headers );
+        $self->respond_data( $content );
+        $self->finalize_response();
+        return 1;
+    }
+    $self->log->debug("CACHE: GET " . $self->original_uri . " (MISS)\n");
+    return;
+}
+
+sub send_to_cache {
+    my $self = shift;
+
+    my $hcache = $self->hcache;
+    $self->log->debug("CACHE: SET " . $self->original_uri . "\n");
+
+    # XXX ->cache is bad, mmmkay?
+    $hcache->cache->set( md5_hex( $self->original_uri . '.content' ), $self->_response->content );
+}
 
 __PACKAGE__->meta->make_immutable();
 

@@ -116,30 +116,42 @@ sub send_request {
     #   got here, so we have to make a fresh request nonetheless
     #   do a regular request
 
+    # check if we have a IMS header. If we don't have an IMS header,
+    # the client thinks it wants a new response, but we might have a
+    # cached version somewhere.
+    my $ims = $request->header('if-modified-since');
+
     # this flag is set when there's no chance the request can be cached
     my $no_cache = 
         $request->method !~ /^(?:GET)$/ ||
-        ($request->header('Pragma') || '') !~ /\bno-cache\b/ ||
-        ($request->header('Cache-Control') || '') !~ /\bno-cache\b/
+        ($request->header('Pragma') || '') =~ /\bno-cache\b/ ||
+        ($request->header('Cache-Control') || '') =~ /\bno-cache\b/
     ;
 
-    if ($no_cache) {
+    if ($ims || $no_cache) {
         $self->send_request_no_probe( $request );
         return;
     }
 
     my $guard; $guard = http_request 'HEAD' => $request->original_uri,
         headers => $request->headers,
-        timeout => 0.5,
-        recurse => 5,
         on_header => sub {
-            my $headers = shift;
-            if ( $headers->{Status} eq '302') {
+            undef $guard;
+            my $headers = $_[1];
+            if ( $headers->{Status} =~ /^30[12]$/) {
                 confess "Unimplemented";
             }
 
             if ( $headers->{Status} eq '304' ) {
                 confess "Unimplemented";
+            }
+
+            # I have a 200, can I get this from the cache?
+            if ($headers->{Status} eq '200') {
+                if ($request->respond_from_cache( $headers )) {
+                    return;
+                }
+                # ugh, no cache...
             }
 
             # if we got here, we couldn't cache. do the real transaction
@@ -194,8 +206,8 @@ sub modify_request {
         $uri->path('/');
     }
 
-    $request->_request->remove_header('Keep-Alive');
-
+    $request->_request->remove_header('Connection');
+=head1
     if (! $request->header('If-Modified-Since') && (my $hcache = $request->hcache) ) {
         # check if we have a Last-Modified stored
         my $last_modified = $hcache->get_last_modified_cache_for( $request );
@@ -204,6 +216,7 @@ sub modify_request {
                 HTTP::Date::time2str( $last_modified ) );
         }
     }
+=cut
 }
 
 __PACKAGE__->meta->make_immutable();
