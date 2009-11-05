@@ -125,6 +125,7 @@ sub send_request {
 
     if ($no_cache) {
         $self->send_request_no_probe( $request );
+        return;
     }
 
     my $guard; $guard = http_request 'HEAD' => $request->original_uri,
