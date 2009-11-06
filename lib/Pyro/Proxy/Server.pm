@@ -16,6 +16,12 @@ has host => (
     is => 'ro',
 );
 
+has listen_size => (
+    is => 'ro',
+    isa => 'Int',
+    default => 128,
+);
+
 has port => (
     is => 'ro',
     default => 8888
@@ -34,12 +40,16 @@ sub start {
         server => $self,
     );
 
-    my $guard = tcp_server $self->host, $self->port, sub {
+    my $incoming_cb = sub {
         my ($socket, $host, $port) = @_;
-
-        # XXX throttle?
         $client->process_connection( $socket, $context );
     };
+
+    my $prepare_cb = sub {
+        return $self->listen_size;
+    };
+
+    my $guard = tcp_server $self->host, $self->port, $incoming_cb, $prepare_cb;
     $self->set_tcp_server_guard($guard);
 }
 
