@@ -9,6 +9,11 @@ use namespace::clean -except => qw(meta);
 
 our $VERSION = '0.00001';
 
+has condvar => (
+    is => 'ro',
+    lazy_build => 1,
+);
+
 has host => (
     is => 'ro',
     default => '0.0.0.0',
@@ -42,6 +47,7 @@ has log => (
 );
 
 sub _build_clients { [] }
+sub _build_condvar { AnyEvent->condvar }
 sub _build_log {
     return Pyro::Log->new();
 }
@@ -55,15 +61,20 @@ sub _build_server {
 
 sub start {
     my $self = shift;
-    my $server = $self->server;
-    $server->start($self);
 
     print "Starting Pyro/$VERSION on ", $self->host, ':',  $self->port, "\n";
-    my $cv = AnyEvent->condvar;
-    $SIG{INT} = sub {
-        print STDERR "Received SIGINT";
-        $cv->send;
-    };
+    my $cv = $self->condvar;
+
+    local %SIG;
+    foreach my $sig qw(INT HUP QUIT TERM) {
+        $SIG{$sig} = sub {
+#            print STDERR "Received SIG$sig";
+            $cv->send;
+        };
+    }
+
+    my $server = $self->server;
+    $server->start($self);
     $cv->recv;
 }
 
