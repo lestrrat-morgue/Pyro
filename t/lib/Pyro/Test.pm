@@ -70,7 +70,34 @@ has server_port => (
 
 sub _build_proxy {
     my $self = shift;
-    return sub { Pyro->new(port => $self->proxy_port)->start };
+    return sub {
+        my %args = ( port => $self->proxy_port );
+
+        my $memcached_class;
+        foreach my $class qw(Cache::Memcached Cache::Memcached::Fast Cache::Memcached::libmemcached) {
+            if (! Class::MOP::is_class_loaded($class) ) {
+                eval { Class::MOP::load_class($class) };
+                if (!$@) {
+                    $memcached_class = $class;
+                    last;
+                }
+            }
+        }
+        if ($memcached_class) {
+            my $sock = IO::Socket::INET->new(
+                PeerHost => '127.0.0.1',
+                PeerPort => '11211',
+            );
+            if ($sock) {
+                $args{cache} = $memcached_class->new({
+                    servers => [ '127.0.0.1:11211' ],
+                    compress_threshold => 10_000
+                });
+            }
+        }
+
+        Pyro->new(%args)->start
+    };
 }
 
 sub _build_proxy_port {
