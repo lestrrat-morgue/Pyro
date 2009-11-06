@@ -18,6 +18,10 @@ requires 'MooseX::NonMoose';
 requires 'MooseX::SimpleConfig';
 requires 'URI';
 
-
+test_requires 'IO::Socket::INET';
+test_requires 'POSIX';
+test_requires 'Plack';
+test_requires 'Plack::Request';
+test_requires 'Test::SharedFork';
 
 WriteAll;
