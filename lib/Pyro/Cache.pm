@@ -1,5 +1,6 @@
 package Pyro::Cache;
 use Moose;
+use Digest::MD5 qw(md5_hex);
 use Moose::Util::TypeConstraints;
 use HTTP::Date;
 use namespace::clean -except => qw(meta);
@@ -61,7 +62,7 @@ sub set_lastmod_cache_if_applicable {
     if (my $last_modified = $response->header('Last-Modified')) {
         my $key = $response->request->original_uri . '.lastmod';
         my $time = HTTP::Date::str2time($last_modified);
-        my $v = $self->cache->get($key);
+        my $v = $self->get($key);
         if (! $v || $time >= $v) {
             $self->cache->set($key => $time);
         }
@@ -72,19 +73,19 @@ sub set_lastmod_cache_if_applicable {
 
 sub set_content_cache_for {
     my ($self, $response) = @_;
-    $self->cache->set(
+    $self->set(
         $response->request->original_uri . '.request' => $response
     );
 }
 
 sub get_content_cache_for {
     my ($self, $request) = @_;
-    $self->cache->get( $request->original_uri . '.request' );
+    $self->get( $request->original_uri . '.request' );
 }
 
 sub get_last_modified_cache_for {
     my ($self, $request) = @_;
-    $self->cache->get( $request->original_uri . '.lastmod' );
+    $self->get( md5_hex( $request->original_uri . '.lastmod' ) );
 }
 
 

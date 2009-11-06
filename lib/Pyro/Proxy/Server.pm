@@ -6,12 +6,6 @@ use Coro::AnyEvent;
 use AnyEvent::Socket;
 use namespace::clean -except => qw(meta);
 
-has hcache => (
-    is => 'ro',
-    isa => 'Pyro::Cache',
-    lazy_build => 1,
-);
-
 has host => (
     is => 'ro',
 );
@@ -31,8 +25,6 @@ has tcp_server_guard => (
     is => 'ro',
     writer => 'set_tcp_server_guard'
 );
-
-sub _build_hcache { Pyro::Cache->new() }
 
 sub start {
     my ($self, $context) = @_;

@@ -5,6 +5,12 @@ use namespace::clean -excetp => qw(meta);
 
 with qw(MooseX::Getopt MooseX::SimpleConfig);
 
+has cache_servers => (
+    is => 'ro',
+    isa => 'ArrayRef',
+    predicate => 'has_cache_servers',
+);
+
 has config => (
     is => 'ro',
     isa => 'HashRef',
@@ -29,6 +35,12 @@ sub run {
     }
 
     $config{port} ||= 8080;
+
+    if ( $self->has_cache_servers ) {
+        $config{cache} = Pyro::Cache->new(
+            cache_servers => $self->cache_servers,
+        );
+    }
 
     my $pyro = Pyro->new(%config);
     $pyro->start();

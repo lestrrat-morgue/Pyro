@@ -14,6 +14,11 @@ has condvar => (
     lazy_build => 1,
 );
 
+has hcache => (
+    is => 'ro',
+    isa => 'Pyro::Cache',
+);
+
 has host => (
     is => 'ro',
     default => '0.0.0.0',
@@ -48,9 +53,7 @@ has log => (
 
 sub _build_clients { [] }
 sub _build_condvar { AnyEvent->condvar }
-sub _build_log {
-    return Pyro::Log->new();
-}
+sub _build_log { Pyro::Log->new() }
 sub _build_server {
     my $self = shift;
     return Pyro::Proxy::Server->new(

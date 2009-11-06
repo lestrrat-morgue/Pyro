@@ -44,7 +44,7 @@ has log => (
 has hcache => (
     is => 'ro',
     isa => 'Pyro::Cache',
-    required => 1,
+    lazy_build => 1,
 );
 
 sub BUILD {
@@ -62,6 +62,7 @@ sub BUILD {
     return $self;
 }
 
+sub _build_hcache { Pyro::Cache->new() }
 sub _build__request { HTTP::Request->new() }
 sub _build__response {
     my $self = shift;
@@ -146,9 +147,9 @@ sub finalize_response {
 
         # if it's cacheable, send it to the cache
         my $no_cache = 
-            $self->method !~ /^(?:GET)$/ ||
-            ($self->header('Pragma') || '') =~ /\bno-cache\b/ ||
-            ($self->header('Cache-Control') || '') =~ /\bno-cache\b/
+            $self->method !~ /^(?:GET)$/i ||
+            ($self->header('Pragma') || '') =~ /\bno-cache\b/i ||
+            ($self->header('Cache-Control') || '') =~ /\bno-cache\b/i
         ;
 
         if (! $no_cache && ! $self->_response->is_error ) {
@@ -180,7 +181,10 @@ sub send_to_cache {
     $self->log->debug("CACHE: SET " . $self->original_uri . "\n");
 
     # XXX ->cache is bad, mmmkay?
-    $hcache->set( md5_hex( $self->original_uri . '.content' ), $self->_response->content );
+    my $response =  $self->_response;
+    $hcache->set( md5_hex( $self->original_uri . '.content' ), $response->content);
+    $hcache->set( md5_hex( $self->original_uri . '.lastmod' ), 
+        HTTP::Date::str2time($response->header('Last-Modified')));
 }
 
 __PACKAGE__->meta->make_immutable();

@@ -207,7 +207,6 @@ sub modify_request {
     }
 
     $request->_request->remove_header('Connection');
-=head1
     if (! $request->header('If-Modified-Since') && (my $hcache = $request->hcache) ) {
         # check if we have a Last-Modified stored
         my $last_modified = $hcache->get_last_modified_cache_for( $request );
@@ -216,7 +215,6 @@ sub modify_request {
                 HTTP::Date::time2str( $last_modified ) );
         }
     }
-=cut
 }
 
 __PACKAGE__->meta->make_immutable();
