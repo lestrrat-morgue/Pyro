@@ -1,11 +1,29 @@
 package Pyro::Test;
+use strict;
+use base qw(Exporter);
+use AnyEvent::HTTP;
+our @EXPORT = qw(test_proxy http_get http_post);
+
+sub test_proxy {
+    my %args = @_;
+
+    my $self = Pyro::Test::Context->new(%args);
+    
+    $self->start_server();
+    $self->start_proxy();
+    $self->run_client();
+}
+
+package #
+    Pyro::Test::Context;
 use Moose;
+use Pyro;
+use Plack;
+use Plack::Loader;
+use Plack::Request;
 use Config;
 use IO::Socket::INET;
 use POSIX;
-use Sub::Exporter -setup => {
-    exports => [ 'test_proxy' ]
-};
 use Test::SharedFork;
 use Test::More ();
 use namespace::clean -except => qw(meta);
@@ -19,7 +37,7 @@ has client => (
 has proxy => (
     is => 'ro',
     isa => 'CodeRef',
-    required => 1,
+    lazy_build => 1,
 );
 
 has proxy_pid => (
@@ -50,6 +68,11 @@ has server_port => (
     lazy_build => 1,
 );
 
+sub _build_proxy {
+    my $self = shift;
+    return sub { Pyro->new(port => $self->proxy_port)->start };
+}
+
 sub _build_proxy_port {
     my $self = shift;
     return empty_port( $self->server_port + 1 );
@@ -79,17 +102,6 @@ sub empty_port {
     die "empty port not found";
 }
 
-sub test_proxy {
-    my %args = @_;
-
-    my $class = $args{PACKAGE} || __PACKAGE__;
-    my $self = $class->new(%args);
-
-    $self->start_server();
-    $self->start_proxy();
-    $self->run_client();
-}
-
 sub start_server {
     my $self = shift;
     my $port = $self->server_port();
@@ -99,7 +111,8 @@ sub start_server {
         return; # parent, which should be the client
     }
 
-    $self->server->( $port );
+    my $plack = Plack::Loader->load("Standalone", port => $port);
+    $plack->run( $self->server );
     exit;
 }
 
