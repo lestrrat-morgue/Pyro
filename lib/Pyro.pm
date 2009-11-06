@@ -62,7 +62,7 @@ sub _build_server {
 sub start {
     my $self = shift;
 
-    print "Starting Pyro/$VERSION on ", $self->host, ':',  $self->port, "\n";
+    $self->log->info( "Starting Pyro/$VERSION on ", $self->host, ':',  $self->port, "\n" );
     my $cv = $self->condvar;
 
     local %SIG;

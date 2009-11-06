@@ -26,7 +26,7 @@ sub _build_log_map {
     }
 }
 
-foreach my $level qw(error debug) {
+foreach my $level qw(debug error info) {
     __PACKAGE__->meta->add_method($level => sub {
         my $self = shift;
         my $loggers = $self->get_loggers($level);
