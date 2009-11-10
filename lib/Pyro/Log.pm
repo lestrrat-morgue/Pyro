@@ -19,8 +19,14 @@ sub _build_log_map {
         on_eof => sub { },
         on_error => sub { },
     );
+    my $stdout = AnyEvent::Handle->new(
+        fh => \*STDOUT,
+        on_eof => sub { },
+        on_error => sub { },
+    );
 
     return {
+        info  => [ $stdout ],
         error => [ $stderr ],
         debug => [ $stderr ],
     }
