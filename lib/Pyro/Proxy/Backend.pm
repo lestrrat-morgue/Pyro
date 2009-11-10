@@ -143,7 +143,9 @@ sub send_request {
             }
 
             if ( $headers->{Status} eq '304' ) {
-                confess "Unimplemented";
+                if ($request->respond_from_cache( $headers )) {
+                    return;
+                }
             }
 
             # I have a 200, can I get this from the cache?
@@ -163,6 +165,10 @@ sub send_request {
 sub send_request_no_probe {
     my ($self, $request) = @_;
 
+    $request->log->debug("BACKEND: send request no probe\n");
+    $request->log->debug(
+        $request->method . " " . $request->original_uri . "\n"
+    );
     http_request
         $request->method => $request->original_uri,
         headers => $request->headers,
