@@ -15,22 +15,23 @@ has cache => (
     lazy_build => 1,
 );
 
-has cache_servers => (
+has servers => (
     is => 'ro',
     isa => 'ArrayRef',
-    predicate => 'has_cache_servers',
+    predicate => 'has_servers',
 );
 
 sub _build_cache {
     my $self = shift;
     my $cache;
-    if ( $self->has_cache_servers ) {
+
+    if ( $self->has_servers ) {
         my $cache_class = 'Cache::Memcached::Fast';
         if (! Class::MOP::is_class_loaded($cache_class)) {
             Class::MOP::load_class($cache_class);
         }
         $cache = $cache_class->new( {
-            servers => $self->cache_servers,
+            servers => $self->servers,
             compress_threshold => 10_000,
         } );
 

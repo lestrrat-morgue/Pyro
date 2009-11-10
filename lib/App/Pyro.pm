@@ -5,12 +5,6 @@ use namespace::clean -excetp => qw(meta);
 
 with qw(MooseX::Getopt MooseX::SimpleConfig);
 
-has cache_servers => (
-    is => 'ro',
-    isa => 'ArrayRef',
-    predicate => 'has_cache_servers',
-);
-
 has debug => (
     is => 'ro',
     isa => 'Bool',
@@ -42,10 +36,8 @@ sub run {
 
     $config{port} ||= 8080;
 
-    if ( $self->has_cache_servers ) {
-        $config{cache} = Pyro::Cache->new(
-            cache_servers => $self->cache_servers,
-        );
+    if ( my $cache_config = delete $config{cache} ) {
+        $config{hcache} = Pyro::Cache->new(%$cache_config);
     }
 
     my $condvar = AnyEvent->condvar;
