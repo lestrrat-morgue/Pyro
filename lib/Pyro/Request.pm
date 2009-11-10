@@ -152,8 +152,12 @@ sub finalize_response {
             ($self->header('Cache-Control') || '') =~ /\bno-cache\b/i
         ;
 
-        if (! $no_cache && ! $self->_response->is_error ) {
-            $self->send_to_cache();
+        # if I have a last modified or an etag, I should cache it
+        if ( ! $no_cache ) {
+            my $response = $self->_response;
+            if ($response->header('last-modified') || $response->header('etag')) {
+                $self->send_to_cache();
+            }
         }
     });
 }
