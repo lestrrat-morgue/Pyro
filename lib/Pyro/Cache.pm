@@ -52,7 +52,7 @@ sub get {
 
 sub set {
     my $self = shift;
-    if (my $cache = $self->cache) {
+    if ((my $cache = $self->cache) && defined $_[0] && defined $_[1]) {
         return $cache->set(@_);
     }
     return;
