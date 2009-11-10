@@ -42,8 +42,11 @@ sub run {
         );
     }
 
+    my $condvar = AnyEvent->condvar;
+    $config{condvar} = $condvar;
     my $pyro = Pyro->new(%config);
     $pyro->start();
+    $condvar->recv;
 }
 
 1;

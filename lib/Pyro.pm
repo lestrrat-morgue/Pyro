@@ -65,20 +65,21 @@ sub _build_server {
 sub start {
     my $self = shift;
 
-    $self->log->info( "Starting Pyro/$VERSION on ", $self->host, ':',  $self->port, "\n" );
-    my $cv = $self->condvar;
+    my $host_port = join(':', $self->host, $self->port);
+    $self->log->info( "Starting Pyro/$VERSION on $host_port\n" );
 
+    my $cv = $self->condvar;
+    $cv->begin;
     local %SIG;
     foreach my $sig qw(INT HUP QUIT TERM) {
         $SIG{$sig} = sub {
 #            print STDERR "Received SIG$sig";
-            $cv->send;
+            $cv->end;
         };
     }
 
     my $server = $self->server;
     $server->start($self);
-    $cv->recv;
 }
 
 __PACKAGE__->meta->make_immutable();
