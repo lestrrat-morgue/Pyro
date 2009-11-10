@@ -11,6 +11,12 @@ has cache_servers => (
     predicate => 'has_cache_servers',
 );
 
+has debug => (
+    is => 'ro',
+    isa => 'Bool',
+    default => 0,
+);
+
 has config => (
     is => 'ro',
     isa => 'HashRef',
@@ -44,7 +50,7 @@ sub run {
 
     my $condvar = AnyEvent->condvar;
     $config{condvar} = $condvar;
-    my $pyro = Pyro->new(%config);
+    my $pyro = Pyro->new(%config, debug => $self->debug);
     $pyro->start();
     $condvar->recv;
 }

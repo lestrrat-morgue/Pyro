@@ -14,6 +14,17 @@ has condvar => (
     lazy_build => 1,
 );
 
+has debug => (
+    is => 'ro',
+    isa => 'Bool',
+    default => 0
+);
+
+has error_log => (
+    is => 'ro',
+    isa => 'Str',
+);
+
 has hcache => (
     is => 'ro',
     isa => 'Pyro::Cache',
@@ -53,7 +64,27 @@ has log => (
 
 sub _build_clients { [] }
 sub _build_condvar { AnyEvent->condvar }
-sub _build_log { Pyro::Log->new() }
+sub _build_log {
+    my $self = shift;
+
+    my %log_map = (
+        info => [ AnyEvent::Handle->new(fh => \*STDOUT) ],
+    );
+    # error log will contain real errors and debug messages
+    if ($self->error_log) {
+        open(my $fh, '>', $self->error_log) or
+            confess "Could not open " . $self->error_log . ": $!";
+        $log_map{ error } = [ AnyEvent::Handle->new( fh => $fh ) ];
+    }
+
+    if ($self->debug) {
+        $log_map{ debug } = $log_map{ error } ||
+            [ AnyEvent::Handle->new(fh => \*STDERR) ];
+    }
+
+    return Pyro::Log->new(log_map => \%log_map)
+}
+
 sub _build_server {
     my $self = shift;
     return Pyro::Proxy::Server->new(
