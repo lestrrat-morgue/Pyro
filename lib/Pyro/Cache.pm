@@ -15,11 +15,19 @@ has cache => (
     lazy_build => 1,
 );
 
+has namespace => (
+    is => 'ro',
+    isa => 'Str',
+    lazy_build => 1,
+);
+
 has servers => (
     is => 'ro',
     isa => 'ArrayRef',
     predicate => 'has_servers',
 );
+
+sub _build_namespace { "pyro_cache:" }
 
 sub _build_cache {
     my $self = shift;
@@ -32,6 +40,7 @@ sub _build_cache {
         }
         $cache = $cache_class->new( {
             servers => $self->servers,
+            namespace => $self->namespace,
             compress_threshold => 10_000,
         } );
 
