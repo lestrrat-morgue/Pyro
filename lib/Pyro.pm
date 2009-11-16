@@ -29,15 +29,6 @@ has hcache => (
     isa => 'Pyro::Cache',
 );
 
-has clients => (
-    traits => ['Array'],
-    is => 'ro',
-    isa => 'ArrayRef',
-    lazy_build => 1,
-    handles => {
-        add_client => 'push',
-    }
-);
 has services => (
     traits => ['Array'],
     is => 'ro',
@@ -54,7 +45,6 @@ has log => (
     lazy_build => 1,
 );
 
-sub _build_clients { [] }
 sub _build_condvar { AnyEvent->condvar }
 sub _build_log {
     my $self = shift;
