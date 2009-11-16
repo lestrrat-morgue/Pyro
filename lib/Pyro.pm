@@ -113,7 +113,64 @@ sub start {
     $server->start($self);
 }
 
+sub stop {
+    my $self = shift;
+    $self->condvar->send;
+}
+
 __PACKAGE__->meta->make_immutable();
 
 1;
 
+__END__
+
+=head1 NAME
+
+Pyro - AnyEvent/Moose Powered Proxy-Cache
+
+=head1 SYNOPSIS
+
+    pyro --configfile=/path/to/config.yaml
+
+=head1 DESCRIPTION
+
+B<This is an alpha release>. Pyro in its current form works as a simple HTTP proxy cache, with memcached as its storage.
+
+=head1 ARCHITECTURE
+
+Pyro is a prefork server. The child processes, however, are event based.
+
+
+=head1 REVERSE PROXY
+
+Put this in front of your servers.
+
+    config:
+        cache:
+            servers:
+                - server1.cache:11211
+                - server2.cache:11211
+                - server3.cache:11211
+                - server4.cache:11211
+        services:
+            - class: ReverseProxy
+              servers:
+                - server1
+                - server2
+                - server3
+                - server4
+
+In reverse proxy mode, 
+
+=head1 FORWARD PROXY
+
+Put this in your local machine or some such so, and configure your browsers.
+
+    config:
+        cache:
+            servers:
+                - 127.0.0.1:11211
+        services:
+            - class: ForwardProxy
+
+=cut

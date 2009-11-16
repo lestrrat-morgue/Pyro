@@ -3,17 +3,6 @@ use Moose;
 use AnyEvent::HTTP qw(http_request);
 use namespace::clean -except => qw(meta);
 
-has apoptosis_timeout => (
-    is => 'ro',
-    isa => 'Int',
-    default => 60,
-);
-
-has apoptosis_timer => (
-    is => 'rw',
-    clearer => 'clear_apoptosis_timer',
-);
-
 has host => (
     is => 'ro',
     isa => 'Str',
@@ -42,6 +31,11 @@ my %INSTANCES;
 
 sub _build_queue { [] }
 
+sub host_port { 
+    my $self = shift;
+    return join(':', $self->host, $self->port);
+}
+
 # one connection per host:port, you can push requests
 sub instance {
     my ($class, $host, $port) = @_;
@@ -58,27 +52,8 @@ before push_queue => sub {
 # once you push a request, start draining
 after push_queue => sub {
     my $self = shift;
-    $self->stop_apoptosis_timer();
     $self->drain_queue();
 };
-
-sub start_apoptosis_timer {
-    my $self = shift;
-    $self->apoptosis_timer(
-        AnyEvent->timer(
-            after => $self->apoptosis_timeout,
-            cb    => sub {
-                my $host_port = join(':', $self->host, $self->port);
-                delete $INSTANCES{ $host_port };
-            }
-        )
-    );
-}
-
-sub stop_apoptosis_timer {
-    my $self = shift;
-    $self->clear_apoptosis_timer();
-}
 
 sub drain_queue {
     my $self = shift;
@@ -86,7 +61,7 @@ sub drain_queue {
     if ($self->is_queue_empty) {
         # if we got here, there was no request. We should stay idle for
         # a certain amount of time, and then remove ourselves from memory
-        $self->start_apoptosis_timer();
+
         return;
     }
 
@@ -166,22 +141,28 @@ sub send_request_no_probe {
     my ($self, $request) = @_;
 
     $request->log->debug("BACKEND: send request no probe\n");
-    $request->log->debug(
+    $request->log->debug("BACKEND: " .
         $request->method . " " . $request->original_uri . "\n"
     );
     http_request
         $request->method => $request->original_uri,
         headers => $request->headers,
         recurse => 0,
+
         on_header => sub {
+            $request->log->debug( "BACKEND got headers\n" );
             $request->respond_headers( $_[0] );
             return 1;
         },
         on_body => sub {
-            $request->respond_data( $_[0] );
+            $request->log->debug( "BACKEND got body\n" );
+            if ($_[0]) {
+                $request->respond_data( $_[0] );
+            }
             return 1;
         },
         sub {
+            $request->log->debug( "BACKEND finalize request\n" );
             $request->finalize_response();
             $self->drain_queue();
         }

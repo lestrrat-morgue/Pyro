@@ -38,7 +38,7 @@ foreach my $level qw(debug error info) {
         my $loggers = $self->get_loggers($level);
         if ($loggers) {
             foreach my $logger (@$loggers) {
-                $logger->push_write("[$level]: @_");
+                $logger->push_write("[$level ($$)]: @_");
             }
         }
     });

@@ -23,11 +23,6 @@ has response => (
     writer => 'set_response',
 );
 
-has server => (
-    is => 'ro',
-    required => 1,
-);
-
 sub build_request {
     my ($self, $client, $method, $url, $protocol, $headers, $hcache, $log) = @_;
 
@@ -145,6 +140,7 @@ sub _parse_headers {
 
     return \%headers;
 }
+
 __PACKAGE__->meta->make_immutable();
 
 1;
