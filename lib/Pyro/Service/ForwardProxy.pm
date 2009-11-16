@@ -23,7 +23,8 @@ sub start {
     Pyro::Service::ForwardProxy::Server->new(
         host => $self->host,
         port => $self->port,
-    )->start($context);
+        context => $context,
+    )->start();
 }
 
 __PACKAGE__->meta->make_immutable();
