@@ -1,4 +1,4 @@
-package Pyro::Proxy::Client;
+package Pyro::Service::ForwardProxy::Client;
 use Moose;
 use AnyEvent::Socket;
 use Coro;
@@ -6,7 +6,7 @@ use HTTP::Date;
 use HTTP::Response;
 use Pyro::Handle;
 use Pyro::Hook;
-use Pyro::Request;
+use Pyro::Service::ForwardProxy::Request;
 use Scalar::Util qw(weaken);
 use URI;
 use namespace::clean -except => qw(meta);
@@ -37,7 +37,7 @@ sub build_request {
         $args{hcache} = $hcache;
     }
 
-    my $request = Pyro::Request->new(%args);
+    my $request = Pyro::Service::ForwardProxy::Request->new(%args);
     return $request;
 }
 

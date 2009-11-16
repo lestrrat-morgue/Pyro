@@ -1,4 +1,4 @@
-package Pyro::Proxy::Server;
+package Pyro::Service::ForwardProxy::Server;
 use Moose;
 use Socket qw(AF_INET AF_UNIX SOCK_STREAM SOL_SOCKET SO_REUSEADDR);
 use AnyEvent;
@@ -6,6 +6,7 @@ use AnyEvent::Handle;
 use AnyEvent::Socket qw(address_family parse_address format_address);
 use AnyEvent::Util qw(AF_INET6);
 use POSIX qw(WNOHANG);
+use Pyro::Service::ForwardProxy::Client;
 
 use namespace::clean -except => qw(meta);
 
@@ -103,7 +104,7 @@ sub start {
                 exit 0;
             };
             $SIG{TERM} = sub { $cv->send };
-            my $client = Pyro::Proxy::Client->new();
+            my $client = Pyro::Service::ForwardProxy::Client->new();
 
             # We want to handle 1 at a time
             my $w; $w = AE::io $socket, 0, sub {

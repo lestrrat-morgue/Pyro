@@ -1,9 +1,9 @@
-package Pyro::Request;
+package Pyro::Service::ForwardProxy::Request;
 use Moose;
 use Digest::MD5 qw(md5_hex);
 use HTTP::Request;
 use HTTP::Response;
-use Pyro::Proxy::Backend;
+use Pyro::Service::ForwardProxy::Backend;
 use namespace::clean -except => qw(meta);
 
 has _request => (
@@ -25,7 +25,7 @@ has _response => (
 
 has backend => (
     is => 'ro',
-    isa => 'Pyro::Proxy::Backend',
+    isa => 'Pyro::Service::ForwardProxy::Backend',
     lazy_build => 1,
 );
 
@@ -74,7 +74,7 @@ sub _build__response {
 sub _build_backend {
     my $self = shift;
     my $original_uri = $self->original_uri;
-    Pyro::Proxy::Backend->instance( $original_uri->host, $original_uri->port );
+    Pyro::Service::ForwardProxy::Backend->instance( $original_uri->host, $original_uri->port );
 }
 
 # the original uri requires that we have a "complete" url

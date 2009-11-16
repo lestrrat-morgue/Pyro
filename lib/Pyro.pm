@@ -1,10 +1,9 @@
 package Pyro;
 use Moose;
 use AnyEvent;
+use AnyEvent::Handle;
 use Pyro::Cache;
 use Pyro::Log;
-use Pyro::Proxy::Client;
-use Pyro::Proxy::Server;
 use namespace::clean -except => qw(meta);
 
 our $VERSION = '0.00001';
@@ -30,16 +29,6 @@ has hcache => (
     isa => 'Pyro::Cache',
 );
 
-has host => (
-    is => 'ro',
-    default => '0.0.0.0',
-);
-
-has port => (
-    is => 'ro',
-    default => 8888
-);
-
 has clients => (
     traits => ['Array'],
     is => 'ro',
@@ -49,11 +38,14 @@ has clients => (
         add_client => 'push',
     }
 );
-
-has server => (
+has services => (
+    traits => ['Array'],
     is => 'ro',
-    isa => 'Pyro::Proxy::Server',
-    lazy_build => 1,
+    isa => 'ArrayRef[Pyro::Service]',
+    required => 1,
+    handles => {
+        all_services => 'elements',
+    }
 );
 
 has log => (
@@ -85,19 +77,8 @@ sub _build_log {
     return Pyro::Log->new(log_map => \%log_map)
 }
 
-sub _build_server {
-    my $self = shift;
-    return Pyro::Proxy::Server->new(
-        host => $self->host,
-        port => $self->port,
-    );
-}
-
 sub start {
     my $self = shift;
-
-    my $host_port = join(':', $self->host, $self->port);
-    $self->log->info( "Starting Pyro/$VERSION on $host_port\n" );
 
     my $cv = $self->condvar;
     $cv->begin;
@@ -109,8 +90,9 @@ sub start {
         };
     }
 
-    my $server = $self->server;
-    $server->start($self);
+    foreach my $service ( $self->all_services ) {
+        $service->start( $self );
+    }
 }
 
 sub stop {

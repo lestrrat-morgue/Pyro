@@ -1,4 +1,4 @@
-package Pyro::Proxy::Backend;
+package Pyro::Service::ForwardProxy::Backend;
 use Moose;
 use AnyEvent::HTTP qw(http_request);
 use namespace::clean -except => qw(meta);
@@ -212,11 +212,11 @@ __END__
 
 =head1 NAME
 
-Pyro::Proxy::Backend - Handle Backend Connection
+Pyro::Service::ForwardProxy::Backend - Handle Backend Connection
 
 =head1 SYNOPSIS
 
-    my $backend = Pyro::Proxy::Backend->instance( $host, $port );
+    my $backend = Pyro::Service::ForwardProxy::Backend->instance( $host, $port );
     $backend->push_queue( $request );
 
 =cut
