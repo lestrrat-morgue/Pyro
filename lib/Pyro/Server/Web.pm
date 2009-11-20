@@ -134,11 +134,6 @@ sub process_request {
     $request->respond_client(400, undef, "bad request");
 }
 
-sub _build_on_stop {
-    my $self = shift;
-    return sub { $self->context->stop };
-}
-
 __PACKAGE__->meta->make_immutable();
 
 1;
