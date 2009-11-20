@@ -160,7 +160,7 @@ after start => sub {
 
                 # consumers of this module must receive this $cv, and call
                 # ->end() when they are done with whatever they were doing
-                $self->on_accept->( $fh, $context, $cv );
+                $self->process_connection( $fh, $context, $cv );
             };
             $w = AE::io $socket, 0, $process_cb;
             $main_cv->recv;
@@ -179,3 +179,10 @@ after start => sub {
 
 1;
 
+__END__
+
+=head1 NAME
+
+Pyro::PreforkServer - Role That Adds Prefork -> AnyEvent Loop
+
+=cut

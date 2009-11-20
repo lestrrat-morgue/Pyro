@@ -134,14 +134,6 @@ sub process_request {
     $request->respond_client(400, undef, "bad request");
 }
 
-sub _build_on_accept {
-    my $self = shift;
-    return sub {
-        my ($fh, $context, $cv) = @_;
-        $self->process_connection( $fh, $context, $cv );
-    }
-}
-
 sub _build_on_stop {
     my $self = shift;
     return sub { $self->context->stop };
