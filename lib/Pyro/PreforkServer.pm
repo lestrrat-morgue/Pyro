@@ -1,5 +1,5 @@
 package Pyro::PreforkServer;
-use Moose::Role;
+use Any::Moose '::Role';
 use Socket qw(AF_INET AF_UNIX SOCK_STREAM SOL_SOCKET SO_REUSEADDR);
 use AnyEvent;
 use AnyEvent::Handle;
@@ -56,6 +56,8 @@ after start => sub {
 
     my $host = $self->host;
     my $service = $self->port;
+
+    $context->log->info( "Starting Pyro Web Service on $host:$service\n" );
 
     # Most of below are taken from AnyEvent::Socket, with some modifications
     if (! defined $host) {
@@ -118,11 +120,11 @@ after start => sub {
 
             # main condvar. if you send() anywhere in the child process, the
             # child process will eventually exit.
-            my $cv = AE::cv {
+            my $main_cv = AE::cv {
                 undef $socket;
                 exit 0;
             };
-            $SIG{TERM} = sub { $cv->send };
+            $SIG{TERM} = sub { $main_cv->send };
 
             # We want to handle N at a time, so we keep canceling $w
             # when we reach the maximum.
@@ -141,15 +143,16 @@ after start => sub {
 
                 $current++;
                 if ($current == $max) {
-                    $context->log->debug( "max connection reached. stopping watcher...\n");
+                    $context->log->debug( "max connection reached ($max). stopping watcher...\n");
                     undef $w;
                 }
+                my $cv = AE::cv;
                 $cv->begin( sub {
-                    if (! $w) {
-                        $context->log->debug( "restarting watcher.\n");
+                    $current--;
+                    if (! $w && $current <= int($max * 0.80)) {
+                        $context->log->debug( "restarting watcher ($current).\n");
                         $w = AE::io $socket, 0, $process_cb;
                     }
-                    $current--;
                 });
 
                 AE::now_update;
@@ -160,7 +163,7 @@ after start => sub {
                 $self->on_accept->( $fh, $context, $cv );
             };
             $w = AE::io $socket, 0, $process_cb;
-            $cv->recv;
+            $main_cv->recv;
             exit 1;
         }
     }
