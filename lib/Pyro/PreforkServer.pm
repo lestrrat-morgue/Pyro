@@ -35,13 +35,6 @@ has port => (
     default => 8888
 );
 
-has on_accept => (
-    is => 'ro',
-    isa => 'CodeRef',
-    lazy_build => 1,
-    required => 1,
-);
-
 has on_stop => (
     is => 'ro',
     isa => 'CodeRef',
@@ -49,15 +42,15 @@ has on_stop => (
     required => 1,
 );
 
-sub _build_on_accept {}
-
 after start => sub {
     my ($self, $context) = @_;
 
     my $host = $self->host;
     my $service = $self->port;
 
-    $context->log->info( "Starting Pyro Web Service on $host:$service\n" );
+    $context->log->info( "Starting Pyro " . 
+        do { my $x = blessed $self; $x =~ s/^Pyro::Server:://; $x } .
+        " Service on $host:$service\n" );
 
     # Most of below are taken from AnyEvent::Socket, with some modifications
     if (! defined $host) {
@@ -176,6 +169,11 @@ after start => sub {
         };
     }
 };
+
+sub _build_on_stop {
+    my $self = shift;
+    return sub { $self->context->stop };
+}
 
 1;
 
