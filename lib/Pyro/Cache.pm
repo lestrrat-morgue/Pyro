@@ -1,7 +1,7 @@
 package Pyro::Cache;
-use Moose;
+use Any::Moose;
 use Digest::MD5 qw(md5_hex);
-use Moose::Util::TypeConstraints;
+use Any::Moose '::Util::TypeConstraints';
 use HTTP::Date;
 use namespace::clean -except => qw(meta);
 

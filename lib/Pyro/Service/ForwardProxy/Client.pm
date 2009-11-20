@@ -1,14 +1,11 @@
 package Pyro::Service::ForwardProxy::Client;
-use Moose;
+use Any::Moose;
 use AnyEvent::Socket;
-use Coro;
 use HTTP::Date;
 use HTTP::Response;
 use Pyro::Handle;
 use Pyro::Hook;
 use Pyro::Service::ForwardProxy::Request;
-use Scalar::Util qw(weaken);
-use URI;
 use namespace::clean -except => qw(meta);
 
 has request => (
@@ -55,10 +52,31 @@ sub build_handle {
 # to get a valid HTTP request. Our goal is to read enough data to create
 # a request, and let it be handled by the backend
 sub process_connection {
-    my ($self, $fh, $context) = @_;
+    my ($self, $client, $context) = @_;
 
     $context->log->debug("New connection!\n");
-    my $client = Pyro::Handle->new( fh => $fh );
+
+    my %state = ();
+
+    my $handle = AnyEvent::Handle->new( fh => $fh );
+
+    my $guard = guard { undef %state };
+    my $guard_clearer = sub { undef $guard };
+    $handle->on_eof( $guard_clearer );
+    $handle->on_error( $guard_clearer );
+    $handle->on_timeout( $guard_clearer );
+
+    my $client_reader = sub {
+        # read up to blank line
+        my ($client, $hdrstr) = @_;
+
+        $state{method} = $method;
+        $state{url}    = $url;
+    };
+
+    my $client_writer = sub {
+    };
+
 
     $client->push_read( line => qr{(?<![^\012])\015?\012},
         sub {

@@ -1,29 +1,27 @@
 package Pyro::Service::ForwardProxy;
-use Moose;
+use Any::Moose;
 use Pyro::Service::ForwardProxy::Server;
 use namespace::clean -except => qw(meta);
 
 extends 'Pyro::Service';
 
-has host => (
+has server_args => (
     is => 'ro',
-    default => '0.0.0.0',
+    isa => 'HashRef',
+    default => sub { +{} }
 );
 
-has port => (
-    is => 'ro',
-    default => 8888
-);
+around BUILDARGS => sub {
+    my ($next, $class, @args) = @_;
+    my $args = $next->($class, @args);
+    return { server_args => $args };
+};
 
 sub start {
     my ($self, $context) = @_;
-    my $host_port = join(':', $self->host, $self->port);
-    $context->log->info( "Starting Pyro ForwardProxy Service on $host_port\n" );
 
     Pyro::Service::ForwardProxy::Server->new(
-        host => $self->host,
-        port => $self->port,
-        context => $context,
+        %{ $self->server_args }, context => $context
     )->start();
 }
 

@@ -1,5 +1,5 @@
 package Pyro;
-use Moose;
+use Any::Moose;
 use AnyEvent;
 use AnyEvent::Handle;
 use Pyro::Cache;
@@ -29,15 +29,13 @@ has hcache => (
     isa => 'Pyro::Cache',
 );
 
-has services => (
-    traits => ['Array'],
+has servers => (
     is => 'ro',
-    isa => 'ArrayRef[Pyro::Service]',
+    isa => 'ArrayRef[Pyro::Server]',
     required => 1,
-    handles => {
-        all_services => 'elements',
-    }
 );
+
+sub all_servers { @{ shift->servers } }
 
 has log => (
     is => 'ro',
@@ -45,7 +43,7 @@ has log => (
     lazy_build => 1,
 );
 
-sub _build_condvar { AnyEvent->condvar }
+sub _build_condvar { AE::cv }
 sub _build_log {
     my $self = shift;
 
@@ -75,13 +73,13 @@ sub start {
     local %SIG;
     foreach my $sig qw(INT HUP QUIT TERM) {
         $SIG{$sig} = sub {
-#            print STDERR "Received SIG$sig";
+            $self->log->debug( "Received SIG$sig\n" );
             $cv->end;
         };
     }
 
-    foreach my $service ( $self->all_services ) {
-        $service->start( $self );
+    foreach my $server ( $self->all_servers ) {
+        $server->start( $self );
     }
 }
 

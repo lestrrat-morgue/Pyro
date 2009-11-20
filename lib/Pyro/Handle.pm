@@ -1,6 +1,6 @@
 package Pyro::Handle;
-use Moose;
-use MooseX::NonMoose;
+use Any::Moose;
+use Any::MooseX::NonMoose;
 use namespace::clean -except => qw(meta);
 
 extends 'AnyEvent::Handle';

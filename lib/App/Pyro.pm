@@ -1,5 +1,5 @@
 package App::Pyro;
-use Moose;
+use Any::Moose;
 use Pyro;
 use namespace::clean -excetp => qw(meta);
 
@@ -40,20 +40,20 @@ sub run {
         $config{hcache} = Pyro::Cache->new(%$cache_config);
     }
 
-    my @services;
-    foreach my $svc ( @{ delete $config{services} || [] }) {
+    my @servers;
+    foreach my $svc ( @{ delete $config{servers} || [] }) {
         my $class = delete $svc->{class};
         if ($class !~ s/^\+//) {
-            $class = "Pyro::Service::$class";
+            $class = "Pyro::Server::$class";
         }
         if (! Class::MOP::is_class_loaded($class)) {
             Class::MOP::load_class($class);
         }
-        push @services, $class->new( %$svc );
+        push @servers, $class->new( %$svc );
     }
-    $config{services} = \@services;
+    $config{servers} = \@servers;
 
-    my $condvar = AnyEvent->condvar;
+    my $condvar = AE::cv;
     $config{condvar} = $condvar;
     my $pyro = Pyro->new(%config, debug => $self->debug);
     $pyro->start();

@@ -1,5 +1,5 @@
 package Pyro::Hook;
-use Moose;
+use Any::Moose;
 use overload
     '&{}' => sub {
         my $self = shift;

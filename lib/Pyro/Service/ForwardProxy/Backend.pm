@@ -1,5 +1,5 @@
 package Pyro::Service::ForwardProxy::Backend;
-use Moose;
+use Any::Moose;
 use AnyEvent::HTTP qw(http_request);
 use namespace::clean -except => qw(meta);
 
@@ -117,18 +117,15 @@ sub send_request {
                 confess "Unimplemented";
             }
 
-            if ( $headers->{Status} eq '304' ) {
-                if ($request->respond_from_cache( $headers )) {
-                    return;
-                }
-            }
+            my $respond_on_cache_miss = sub {
+                $self->send_request_no_probe( $request );
+            };
 
-            # I have a 200, can I get this from the cache?
-            if ($headers->{Status} eq '200') {
-                if ($request->respond_from_cache( $headers )) {
-                    return;
-                }
-                # ugh, no cache...
+            if ( $headers->{Status} eq '304' ||
+                 $headers->{Status} eq '200'
+            ) {
+                $request->respond_from_cache( $headers, on_cache_miss => $respond_on_cache_miss);
+                return;
             }
 
             # if we got here, we couldn't cache. do the real transaction

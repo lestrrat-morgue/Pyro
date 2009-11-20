@@ -1,5 +1,5 @@
 package Pyro::Service::ForwardProxy::Request;
-use Moose;
+use Any::Moose;
 use Digest::MD5 qw(md5_hex);
 use HTTP::Request;
 use HTTP::Response;
@@ -181,11 +181,12 @@ sub respond_from_cache {
 sub send_to_cache {
     my $self = shift;
 
-    my $hcache = $self->hcache;
     $self->log->debug("CACHE: SET " . $self->original_uri . "\n");
 
-    # XXX ->cache is bad, mmmkay?
     my $response =  $self->_response;
+
+    # We don't really care if the request was properly cached or not
+    my $hcache = $self->hcache;
     $hcache->set( md5_hex( $self->original_uri . '.content' ), $response->content);
     $hcache->set( md5_hex( $self->original_uri . '.lastmod' ), 
         HTTP::Date::str2time($response->header('Last-Modified')));

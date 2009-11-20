@@ -1,5 +1,5 @@
 package Pyro::Service;
-use Moose;
+use Any::Moose;
 use namespace::clean -except => qw(meta);
 
 __PACKAGE__->meta->make_immutable();

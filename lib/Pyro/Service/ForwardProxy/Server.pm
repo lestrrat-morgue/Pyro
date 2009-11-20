@@ -1,5 +1,5 @@
 package Pyro::Service::ForwardProxy::Server;
-use Moose;
+use Any::Moose;
 use Pyro::Service::ForwardProxy::Client;
 use namespace::clean -except => qw(meta);
 
@@ -16,6 +16,12 @@ has context => (
     required => 1,
 );
 
+before start => sub {
+    my $self = shift;
+    my $host_port = join(':', $self->host, $self->port);
+    $self->context->log->info( "Starting Pyro ForwardProxy Service on $host_port\n" );
+};
+
 sub _build_client {
     return Pyro::Service::ForwardProxy::Client->new();
 }
@@ -23,8 +29,8 @@ sub _build_client {
 sub _build_on_accept {
     my $self = shift;
     return sub {
-        my $fh = shift;
-        $self->client->process_connection( $fh, $self->context );
+        my $handle = shift;
+        $self->client->process_connection( $handle, $self->context );
     }
 }
 

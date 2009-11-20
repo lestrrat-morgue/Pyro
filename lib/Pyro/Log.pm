@@ -1,17 +1,15 @@
 package Pyro::Log;
-use Moose;
+use Any::Moose;
 use namespace::clean -except => qw(meta);
 
 has log_map => (
-    traits => ['Hash'],
     is => 'ro',
     isa => 'HashRef',
     lazy_build => 1,
-    handles => {
-        add_logger => 'set',
-        get_loggers => 'get',
-    }
 );
+
+sub add_logger { shift->log_map->{$_[0]} = $_[1] }
+sub get_loggers { shift->log_map->{$_[0]} }
 
 sub _build_log_map {
     my $stderr = AnyEvent::Handle->new(
