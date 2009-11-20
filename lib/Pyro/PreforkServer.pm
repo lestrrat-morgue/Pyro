@@ -24,6 +24,12 @@ has listen_queue => (
     default => 128,
 );
 
+has max_connections_per_child => (
+    is => 'ro',
+    isa => 'Int',
+    default => 10
+);
+
 has port => (
     is => 'ro',
     default => 8888
@@ -45,7 +51,7 @@ has on_stop => (
 
 sub _build_on_accept {}
 
-sub start {
+after start => sub {
     my ($self, $context) = @_;
 
     my $host = $self->host;
@@ -101,6 +107,7 @@ sub start {
         }
     };
 
+    $context->log->debug( sprintf("Concurrency level is %d\n", $self->concurrency ) );
     for(1..$self->concurrency) {
         my $pid = fork();
         die unless defined $pid;
@@ -108,24 +115,53 @@ sub start {
             $children{$pid} = 1;
         } else {
             local %SIG;
-            my $cv = AE::cv { 
+
+            # main condvar. if you send() anywhere in the child process, the
+            # child process will eventually exit.
+            my $cv = AE::cv {
+                undef $socket;
                 exit 0;
             };
             $SIG{TERM} = sub { $cv->send };
 
-            # We want to handle 1 at a time
-            my $w; $w = AE::io $socket, 0, sub {
+            # We want to handle N at a time, so we keep canceling $w
+            # when we reach the maximum.
+            my $w;
+            my $process_cb;
+            my $current = 0;
+            my $max = $self->max_connections_per_child;
+            $context->log->debug( "child process: max connections: $max\n" );
+
+            $process_cb = sub {
                 return unless $socket;
 
                 my $fh;
                 my $peer = accept $fh, $socket;
                 return unless $peer;
 
+                $current++;
+                if ($current == $max) {
+                    $context->log->debug( "max connection reached. stopping watcher...\n");
+                    undef $w;
+                }
+                $cv->begin( sub {
+                    if (! $w) {
+                        $context->log->debug( "restarting watcher.\n");
+                        $w = AE::io $socket, 0, $process_cb;
+                    }
+                    $current--;
+                });
+
                 AE::now_update;
-                fh_nonblocking($fh, 1); # POSIX requires inheritance, the outside world does not
-                $self->on_accept->( $fh, $context );
+                fh_nonblocking($fh, 1); 
+
+                # consumers of this module must receive this $cv, and call
+                # ->end() when they are done with whatever they were doing
+                $self->on_accept->( $fh, $context, $cv );
             };
+            $w = AE::io $socket, 0, $process_cb;
             $cv->recv;
+            exit 1;
         }
     }
 
@@ -136,7 +172,7 @@ sub start {
             $self->on_stop->() if scalar keys %children == 0;
         };
     }
-}
+};
 
 1;
 
