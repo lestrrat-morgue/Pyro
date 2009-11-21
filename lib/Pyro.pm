@@ -8,6 +8,12 @@ use namespace::clean -except => qw(meta);
 
 our $VERSION = '0.00001';
 
+has child_watchers => (
+    is => 'ro',
+    isa => 'HashRef',
+    lazy_build => 1,
+);
+
 has condvar => (
     is => 'ro',
     lazy_build => 1,
@@ -35,14 +41,13 @@ has servers => (
     required => 1,
 );
 
-sub all_servers { @{ shift->servers } }
-
 has log => (
     is => 'ro',
     isa => 'Pyro::Log',
     lazy_build => 1,
 );
 
+sub _build_child_watchers { +{} }
 sub _build_condvar { AE::cv }
 sub _build_log {
     my $self = shift;
@@ -65,20 +70,36 @@ sub _build_log {
     return Pyro::Log->new(log_map => \%log_map)
 }
 
+sub all_servers { @{ shift->servers } }
+sub add_child_watcher {
+    my ($self, $pid) = @_;
+
+    $self->child_watchers->{$pid} = AE::child $pid, sub {
+        return unless $self;
+        delete $self->child_watchers->{$pid};
+        $self->condvar->end if scalar keys %{ $self->child_watchers } == 0;
+    };
+}
+
 sub start {
     my $self = shift;
 
     my $cv = $self->condvar;
     $cv->begin;
+
     local %SIG;
     foreach my $sig qw(INT HUP QUIT TERM) {
         $SIG{$sig} = sub {
-            $self->log->debug( "Received SIG$sig\n" );
-            $cv->end;
-        };
-    }
+            foreach my $pid (keys %{ $self->child_watchers } ) {
+                print "Received $sig: Killing $pid\n";
+                kill TERM => $pid;
+                $cv->end;
+            }
+        }
+    };
 
     foreach my $server ( $self->all_servers ) {
+        $cv->begin;
         $server->start( $self );
     }
 }

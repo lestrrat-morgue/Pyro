@@ -43,7 +43,7 @@ has on_stop => (
 );
 
 after start => sub {
-    my ($self, $context) = @_;
+    my ($self, $context, $pyro_cv) = @_;
 
     my $host = $self->host;
     my $service = $self->port;
@@ -91,33 +91,22 @@ after start => sub {
     listen $socket, $self->listen_queue
         or Carp::croak "listen: $!";
 
-    my %children;
-    local %SIG;
-    foreach my $sig qw(INT HUP QUIT TERM) {
-        $SIG{$sig} = sub {
-            foreach my $pid (keys %children) {
-                print "Received $sig: Killing $pid\n";
-                kill TERM => $pid;
-            }
-        }
-    };
-
     $context->log->debug( sprintf("Concurrency level is %d\n", $self->concurrency ) );
     for(1..$self->concurrency) {
         my $pid = fork();
         die unless defined $pid;
         if ($pid) {
-            $children{$pid} = 1;
+            $context->add_child_watcher( $pid );
         } else {
             local %SIG;
 
             # main condvar. if you send() anywhere in the child process, the
             # child process will eventually exit.
-            my $main_cv = AE::cv {
+            my $server_cv = AE::cv {
                 undef $socket;
                 exit 0;
             };
-            $SIG{TERM} = sub { $main_cv->send };
+            $SIG{TERM} = sub { $server_cv->send };
 
             # We want to handle N at a time, so we keep canceling $w
             # when we reach the maximum.
@@ -156,18 +145,11 @@ after start => sub {
                 $self->process_connection( $fh, $context, $cv );
             };
             $w = AE::io $socket, 0, $process_cb;
-            $main_cv->recv;
+            $server_cv->recv;
             exit 1;
         }
     }
 
-    foreach my $childpid (keys %children) {
-        my $chld; $chld = AE::child $childpid, sub {
-            delete $children{$childpid};
-            undef $chld;
-            $self->on_stop->() if scalar keys %children == 0;
-        };
-    }
 };
 
 sub _build_on_stop {
