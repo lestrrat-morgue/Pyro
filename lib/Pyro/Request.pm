@@ -10,6 +10,10 @@ has client => (
     isa => 'AnyEvent::Handle',
 );
 
+has content => (
+    is => 'rw',
+);
+
 has cv => (
     is => 'rw',
     isa => 'Object',
@@ -33,6 +37,12 @@ has protocol => (
     is => 'rw',
     isa => 'Str',
     default => '1.1',
+);
+
+has tls_ctx => (
+    is => 'ro',
+    isa => 'Str',
+    default => 'low',
 );
 
 has uri => (
@@ -70,7 +80,7 @@ sub new_response {
     my ($self, @args) = @_;
 
     my $res = HTTP::Response->new(@args);
-    $res->header( 'Server' => "Pyro/$Pyro::VERSION" ); 
+#    $res->header( 'Server' => "Pyro/$Pyro::VERSION" ); 
     $res->protocol( 'HTTP/' . $self->protocol );
     $self->response( $res );
     return $res;
@@ -144,6 +154,10 @@ sub parse_headers {
 sub finalize {
     my $self = shift;
     $self->cv->end;
+}
+
+sub DEMOLISH {
+    warn "Pyro::Request::DEMOLISH";
 }
 
 __PACKAGE__->meta->make_immutable();
